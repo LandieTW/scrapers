@@ -1,0 +1,12 @@
+# Cookies and personal data
+cookies.txt
+*.txt
+
+# Downloads
+downloads/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
