@@ -2,6 +2,9 @@
 cookies.txt
 *.txt
 
+# scrapping results
+data.xlsx
+
 # Downloads
 downloads/
 

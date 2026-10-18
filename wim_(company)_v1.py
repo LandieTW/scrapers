@@ -1,8 +1,8 @@
-# Método Wanderley de Investimentos (MWI)
+#!/usr/bin/env python3
 
 """
 This is an auto-searching script for evaluating stock investiments in Brazilian companies
-on the stock market, using data from the Status Invest website and referencing.
+on the stock market, using data from Fundamentus website and referencing.
 """
 
 from selenium import webdriver
@@ -11,7 +11,8 @@ from selenium.webdriver.edge.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
+from typing import Optional
+from pprint import pprint
 import os
 import numpy as np
 import pandas as pd
@@ -19,24 +20,47 @@ import numpy as np
 import time
 import warnings
 
-# Suprimir warnings específicos
+# ignoring warning outuputs
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ----------------------------------------------------------------
 
-fundamentus_url = "https://www.fundamentus.com.br/"
+fundamentus_url = "https://www.fundamentus.com.br/resultado.php"
 
 # ----------------------------------------------------------------
 
-def click(driver, xpath, wait_time=10):
+def click(driver, xpath: str, wait_time=10) -> Optional[bool]:
+    """Clicks in elements which xpath is given"""
+    wait = WebDriverWait(driver, wait_time)
     try:
-        wait = WebDriverWait(driver, wait_time)
         element = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
-        element.click()
-        return element
+        try: 
+            element.click()
+        except:
+            driver.execute_script("arguments[0].click();", element)
+        time.sleep(2)
     except Exception as e:
-        print(f"Error clicking element with XPath {xpath}: {e}")
+        print(f"Error clicking element with XPath {xpath}: \n{e}")
+
+def parse_cell(text: str):
+    """Parses a numerical text to float format"""
+    text = text.strip()
+    is_percent = text.endswith("%")
+    if is_percent:
+        text = text.removesuffix("%").strip()
+
+    if "," not in text:
+        try:
+            val = float(text.replace(".", ""))
+        except ValueError:
+            return text
+    else:
+        integer, decimal = text.rsplit(",", 1)
+        integer = integer.replace(",", "").replace(".", "")
+        val = float(f"{integer}.{decimal}")
+
+    return val
 
 # ----------------------------------------------------------------
 
@@ -51,65 +75,52 @@ edge_options.add_argument("--disable-dev-shm-usage")
 edge_options.add_argument("--no-sandbox")
 edge_options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
-service = Service(
-    os.path.join(_this_path, "msedgedriver.exe"),
-    log_path=os.devnull
-)
+service = Service(os.path.join(_this_path, "msedgedriver.exe"), log_path=os.devnull)
 
 try:
-
     driver = webdriver.Edge(service=service, options=edge_options)
     
     driver.get(fundamentus_url)
     wait = WebDriverWait(driver, 15)
 
-    click(driver, "/html/body/div[1]/div[1]/div[1]/span/a[1]")
-    time.sleep(2)
-    
-    driver.switch_to.window(driver.window_handles[-1])
-    time.sleep(2)
-    
-    click(driver, '/html/body/div[1]/div[2]/form/input')
-    time.sleep(2)
-    
-    driver.switch_to.window(driver.window_handles[-1])
-    time.sleep(2)
+    fundamentus_version = wait.until(EC.presence_of_element_located((By.XPATH, "/html/body/div[1]/div[1]/div[2]/ul[1]/li[5]/a"))).text
+    if "Mobile" in fundamentus_version:
+        click(driver, "/html/body/div[1]/div[1]/div[2]/ul[1]/li[5]/a")
 
-    headers = driver.find_elements(By.XPATH, "/html/body/div[1]/div[2]/table/thead/tr/th")
-    headers_columns = [h.text for h in headers]
+    all_windows = driver.window_handles
+    driver.switch_to.window(all_windows[-1])
 
-    tbody = wait.until(EC.presence_of_element_located((By.XPATH, "/html/body/div[1]/div[2]/table/tbody")))
-    data = [info.text.split(" ") for info in tbody.find_elements(By.TAG_NAME, "tr")]
+    header = wait.until(EC.presence_of_element_located((By.XPATH, "/html/body/div[2]/div/div[2]/table/thead/tr"))).text.split("\n")
+    header = header[1:]
+    for h in range(len(header)):
+        if header[h] in ["DIV.YIELD", "MRG EBIT", "MRG. LÍQ.", "ROIC", "ROE", "CRESC. REC.5A"]:
+            header[h] += " [%]"
+
+    tbody = wait.until(EC.presence_of_element_located((By.XPATH, "/html/body/div[2]/div/div[2]/table/tbody")))
+    rows = tbody.find_elements(By.TAG_NAME, "tr")
+
+    index, lines = [], []
+    for row in rows:
+        cells = row.find_elements(By.TAG_NAME, "td")
+        values = [parse_cell(cell.text) for cell in cells]
+        index.append(values[0])
+        lines.append(values[1:])
+
+    df = pd.DataFrame(lines, columns=header, index=index)
+
+    for col in ["COTAÇÃO", "P/L", "P/VP"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df["LPA"] = np.where(df["P/L"] != 0, df["COTAÇÃO"] / df["P/L"], 0)
+    df["VPA"] = np.where(df["P/VP"] != 0, df["COTAÇÃO"] / df["P/VP"], 0)
     
-    df = pd.DataFrame(data, columns=headers_columns)
+    produto = 22.5 * df["LPA"] * df["VPA"]
+    df["GRAHAM"] = np.sqrt(np.where(produto > 0, produto, np.nan))
 
-    df = df.drop(columns=["PSR", "Div.Yield", "P/Ativo", "P/Cap.Giro", "P/EBIT", "P/Ativ Circ.Liq", "Liq. Corr.", "EV/EBIT", "EV/EBITDA", "Patrim. Líq"])
-    
-    for c in ["Cotação", "P/L", "P/VP", "Mrg Bruta", "Mrg Ebit", "Mrg. Líq.", "ROIC", "ROE", "Liq.2meses", "Dív.Líq/ Patrim.", "Cresc. Rec.5a"]:
-        df[c] = (df[c].str.replace("%", "", regex=False).str.replace(".", "", regex=False).str.replace(",", ".", regex=False).str.replace(r"^-$", "0", regex=True).astype(float))
-
-    df["LPA"] = np.where(df["P/L"] != 0, df["Cotação"] / df["P/L"], 0)
-    df["VPA"] = np.where(df["P/VP"] != 0, df["Cotação"] / df["P/VP"], 0)
-
-    df = df.drop(columns=["P/L", "P/VP"])
-    
-    df["Graham"] = np.sqrt(22.5 * df["LPA"] * df["VPA"])
-
-    df = df[
-        (df["Mrg Bruta"] > 10)
-        & (df["Mrg Ebit"] > 10)
-        & (df["Mrg. Líq."] > 10)
-        & (df["ROIC"] > 10)
-        & (df["ROE"] > 10)
-        & (df["Cresc. Rec.5a"] > 10)
-        & (df["Liq.2meses"]/2 > 1e6)
-        & (df["Dív.Líq/ Patrim."] < 1)
-        & (df["Graham"] > df["Cotação"] * 1.1)
-        ]
-    
     df = df.reset_index(drop=True)
 
-    from pprint import pprint
+    xlsx_path = os.path.join(os.path.dirname(__file__), "data.xlsx")
+    df.to_excel(xlsx_path, index=True)
     pprint(df)
     
 except Exception as e:
