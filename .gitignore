@@ -5,8 +5,12 @@ cookies.txt
 # scrapping results
 data.xlsx
 
+# ms_edge driver
+msedgedriver.exe
+
 # Downloads
 downloads/
+Driver_Notes/
 
 # Python
 __pycache__/

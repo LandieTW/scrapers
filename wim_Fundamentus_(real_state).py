@@ -1,8 +1,8 @@
 # Método Wanderley de Investimentos (MWI)
 
 """
-This is an auto-searching script for evaluating stock investiments in Brazilian companies
-on the stock market, using data from the Status Invest website and referencing.
+This is an auto-searching script for evaluating investiments in Brazilian real 
+state market, using data from Fundamentus website.
 """
 
 from selenium import webdriver

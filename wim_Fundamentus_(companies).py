@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 """
-This is an auto-searching script for evaluating stock investiments in Brazilian companies
-on the stock market, using data from Fundamentus website and referencing.
+This is an auto-searching script for evaluating investiments in Brazilian 
+companies market, using data from Fundamentus website.
 """
 
 from selenium import webdriver
