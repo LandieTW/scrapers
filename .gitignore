@@ -5,6 +5,7 @@ cookies.txt
 # scrapping results
 data.xlsx
 data_per_ticker.xlsx
+ClassifSetorial.xlsx
 
 # ms_edge driver
 msedgedriver.exe
