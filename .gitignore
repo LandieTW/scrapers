@@ -3,12 +3,11 @@ cookies.txt
 *.txt
 
 # scrapping results
-data.xlsx
-data_per_ticker.xlsx
-ClassifSetorial.xlsx
+*.xlsx
 
 # ms_edge driver
 msedgedriver.exe
+edgedriver_win64.zip
 
 # Downloads
 downloads/
